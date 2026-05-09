@@ -1,0 +1,13 @@
+1 - Create class for running local llms that:
+    - Uses llama-cpp-python
+    - Unloads and loads the model if it's different from the currently loaded one
+    - Calls the model with the prompt
+
+2 - Create a model manager class that:
+    - Lists all available local and cloud models
+    - Checks if a given model is available or not
+    - Allows downloading a model from the internet for local usage
+
+3 - Integrate those classes into the api
+    - It should feature streaming mode
+    - It should be compatible with openai chat completions
