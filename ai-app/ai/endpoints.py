@@ -19,7 +19,7 @@ async def sse_generator(llm, payload):
 
 @api.get("/v1/models")
 def list_models(request):
-    models = AIModel.objects.filter(is_active=True)
+    models = AIModel.objects.all()
     return {
         "object": "list",
         "data": [{"id": m.name, "object": "model", "owned_by": "local"} for m in models]
@@ -28,7 +28,7 @@ def list_models(request):
 @api.post("/v1/chat/completions")
 def chat_completions(request, data: ChatCompletionRequest):
     try:
-        model_db = AIModel.objects.get(name=data.model, is_active=True)
+        model_db = AIModel.objects.get(name=data.model)
     except AIModel.DoesNotExist:
         return {"error": "Model not found or inactive"}, 404
 
