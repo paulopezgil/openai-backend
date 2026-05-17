@@ -219,3 +219,7 @@ __marimo__/
 
 # Local AI models
 *.gguf
+
+# Local development files
+.vscode/
+.opencode/
