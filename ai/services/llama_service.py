@@ -16,10 +16,6 @@ class LlamaService:
     def is_model_loaded(self) -> bool:
         return self._model_manager.loaded_model is not None
 
-    @property
-    def loaded_model_name(self) -> Optional[str]:
-        return self._model_manager.loaded_model_name
-
     def complete(
         self,
         prompt: str,
@@ -49,19 +45,19 @@ class LlamaService:
         Returns:
             Dict with 'text', 'stop_reason', 'model', and token usage info
         """
+
+        # Load the requested model if it's not already loaded or if a different model is currently loaded
         if self._model_manager.loaded_model is None or self._model_manager.loaded_model_name != model:
             logger.info(f"Loading model '{model}' for completion")
             self._model_manager.load_model(model_name=model)
 
+        # Get the loaded model instance
         model_instance = self._model_manager.loaded_model
 
         if stop is None:
             stop = []
 
         logger.info(f"Creating completion (model={model}, max_tokens={max_tokens}, temp={temperature})")
-
-        if stream:
-            raise NotImplementedError("Streaming not yet implemented")
 
         response = model_instance(
             prompt,
@@ -72,6 +68,7 @@ class LlamaService:
             repeat_penalty=repeat_penalty,
             stop=stop,
             echo=False,
+            stream=stream,
         )
 
         return {
@@ -106,7 +103,7 @@ class LlamaService:
 
     def list_models(self) -> list[str]:
         """List available models."""
-        return self._model_manager.list_models()
+        return self._model_manager.list_available_models()
 
 
 llama_service = LlamaService()

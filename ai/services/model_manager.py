@@ -1,9 +1,11 @@
+import gc
 import logging
 from pathlib import Path
 from typing import Optional, Dict, Any
 from threading import RLock
 
 from llama_cpp import Llama
+from huggingface_hub import hf_hub_download
 
 logger = logging.getLogger(__name__)
 
@@ -51,60 +53,85 @@ class ModelManager:
         seed: int = -1,
         **kwargs: Any,
     ) -> None:
-        """
-        Load a GGUF model into memory.
-
-        Use the `loaded_model` property to access the loaded Llama instance.
-        """
+        """ Load a model by name, unloading any currently loaded model if it's different."""
+        
         with self._lock:
-            if self.loaded_model is not None and self.loaded_model_name != model_name:
+            if self._loaded_model_name != model_name:
+                # Clear the currently loaded model if it's different from the one we want to load
                 self.clear_loaded_model()
 
-            actual_model_path = self._find_model_path(model_name)
+                # Find the actual model file path (the largest .gguf file in the model directory)
+                model_path = self._create_model_path(model_name)
 
-            logger.info(f"Loading model '{model_name}' from {actual_model_path}...")
-            self._loaded_model = Llama(
-                model_path=actual_model_path,
-                n_ctx=n_ctx,
-                n_gpu_layers=n_gpu_layers,
-                n_threads=n_threads,
-                seed=seed,
-                **kwargs,
-            )
-            logger.info(f"Model '{model_name}' loaded successfully")
-
-            self._loaded_model_name = model_name
+                # Load the model using Llama and log the process
+                logger.info(f"Loading model '{model_name}' from {model_path}...")
+                self._loaded_model = Llama(
+                    model_path=model_path,
+                    n_ctx=n_ctx,
+                    n_gpu_layers=n_gpu_layers,
+                    n_threads=n_threads,
+                    seed=seed,
+                    **kwargs,
+                )
+                logger.info(f"Model '{model_name}' loaded successfully")
+                self._loaded_model_name = model_name
         
-    def list_models(self) -> list[str]:
-        models_path = Path(self._models_dir)
-        if not models_path.exists():
-            return []
-        return [
-            d.name
-            for d in models_path.iterdir()
-            if d.is_dir() and list(d.glob("*.gguf"))
-        ]
-
     def clear_loaded_model(self) -> None:
+        """Unload the currently loaded model from memory."""
+
         with self._lock:
             if self._loaded_model is not None:
-                model_name = self._loaded_model_name
+                # Log the model being cleared for better visibility in logs
+                logger.info(f"Cleaning '{self._loaded_model_name}' from memory")   
+                
+                # Explicitly delete the loaded model
                 del self._loaded_model
+                
+                # Force garbage collection to free up memory immediately
+                gc.collect()
+
+                # Clear the loaded model info after deletion
                 self._loaded_model = None
                 self._loaded_model_name = None
-                logger.info(f"Model '{model_name}' cleared from memory")    
 
-    def _find_model_path(self, model_name: str) -> str:
-        model_path = Path(self._models_dir) / model_name
-        if not model_path.exists() or not model_path.is_dir():
-            raise FileNotFoundError(f"Model '{model_name}' not found in '{self._models_dir}'")
+    def list_available_models(self) -> list[str]:
+        """List available GGUF model files in the models directory."""
+        models_path = self._create_model_dir_path()
+        return sorted(f.name for f in models_path.glob("*.gguf")) 
 
-        gguf_files = sorted(
-            model_path.glob("*.gguf"),
-            key=lambda f: f.stat().st_size,
-            reverse=True
+    def download_model(
+        self,
+        repo_id: str,
+        filename: str,
+    ) -> str:
+        """
+        Download a model from HuggingFace and save it to the models directory.
+
+        Args:
+            repo_id: HuggingFace repo ID (e.g., 'TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF')
+            filename: Name of the GGUF file to download
+
+        Returns:
+            Path to the downloaded model file
+        """
+        logger.info(f"Downloading '{filename}' from '{repo_id}'...")
+        local_path = hf_hub_download(
+            repo_id=repo_id,
+            filename=filename,
+            local_dir=str(self._create_model_dir_path()),
+            local_dir_use_symlinks=False,
         )
-        if not gguf_files:
-            raise FileNotFoundError(f"No GGUF file found in: {model_path}")
+        logger.info(f"Model downloaded to '{local_path}'")
 
-        return str(gguf_files[0])
+    def _create_model_dir_path(self) -> Path:
+        """Create the path to the models directory."""
+        models_path = Path(self._models_dir)
+        models_path.mkdir(parents=True, exist_ok=True)
+        return models_path
+        
+    def _create_model_path(self, model_name: str) -> str:
+        """Create the path to the model file."""
+        model_path = self._create_model_dir_path() / model_name
+        if model_path.is_file():
+            return str(model_path)
+        raise FileNotFoundError(f"Model '{model_name}' not found in '{self._models_dir}'")
