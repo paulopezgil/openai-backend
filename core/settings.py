@@ -11,9 +11,17 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 """
 
 from pathlib import Path
+import environ
+
+env = environ.Env()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+environ.Env.read_env(BASE_DIR / ".env")
+
+# AI Settings
+HF_TOKEN = env("HF_TOKEN", default="")
+MODELS_DIR = env("MODELS_DIR", default=str(BASE_DIR / "models"))
 
 
 # Quick-start development settings - unsuitable for production

@@ -11,6 +11,9 @@ python = "^3.12"
 django = "^5.0"
 llama-cpp-python = "^0.2.90"
 huggingface-hub = "^0.20.0"
+pydantic = "^2.13.4"
+python-dotenv = "^1.2.2"
+django-environ = "^0.13.0"
 
 
 [build-system]
