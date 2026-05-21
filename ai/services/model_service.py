@@ -1,8 +1,9 @@
+import gc
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Any
 from huggingface_hub import hf_hub_download
-
+from llama_cpp import Llama
 from django.conf import settings
 
 
@@ -10,16 +11,8 @@ logger = logging.getLogger(__name__)
 
 
 class ModelRegistry:
-    _instance: Optional["ModelRegistry"] = None
-
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super(ModelRegistry, cls).__new__(cls)
-            cls._instance._models_dir = getattr(settings, "MODELS_DIR", "models")
-        return cls._instance
-
     def __init__(self) -> None:
-        pass
+        self._models_dir = getattr(settings, "MODELS_DIR", "models")
 
     def download_model(
         self,
@@ -69,6 +62,43 @@ class ModelRegistry:
         models_path = Path(self._models_dir)
         models_path.mkdir(parents=True, exist_ok=True)
         return models_path
+    
 
+class ModelLoader:
+    def __init__(self) -> None:
+        self._loaded_model = None
+        self._loaded_model_path = None
 
-model_registry = ModelRegistry()
+    @property
+    def loaded_model(self) -> Optional[Llama]:
+        return self._loaded_model
+
+    @property
+    def loaded_model_path(self) -> Optional[str]:
+        return self._loaded_model_path
+
+    def load_model(
+        self,
+        model_path: str,
+        n_ctx: int = 2048,
+        n_gpu_layers: int = 0,
+        n_threads: Optional[int] = None,
+        seed: int = -1,
+        **kwargs: Any,
+    ) -> None:
+        """Load a model by path"""
+        self._loaded_model_path = model_path
+        self._loaded_model = Llama(
+            model_path=model_path,
+            n_ctx=n_ctx,
+            n_gpu_layers=n_gpu_layers,
+            n_threads=n_threads,
+            seed=seed,
+            **kwargs,
+        )
+
+    def clear_loaded_model(self) -> None:
+        """Unload the currently loaded model from memory."""
+        del self._loaded_model
+        gc.collect()
+        self._loaded_model = None

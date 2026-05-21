@@ -347,12 +347,12 @@ i18n = ["Babel (>=2.7)"]
 
 [[package]]
 name = "llama-cpp-python"
-version = "0.2.90"
+version = "0.3.23"
 description = "Python bindings for the llama.cpp library"
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "llama_cpp_python-0.2.90.tar.gz", hash = "sha256:419b041c62dbdb9f7e67883a6ef2f247d583d08417058776be0bff05b4ec9e3d"},
+    {file = "llama_cpp_python-0.3.23.tar.gz", hash = "sha256:85493cd887b543588941e8704640fef6a54c057443292e527559c30728375ffd"},
 ]
 
 [package.dependencies]
@@ -363,9 +363,9 @@ typing-extensions = ">=4.5.0"
 
 [package.extras]
 all = ["llama_cpp_python[dev,server,test]"]
-dev = ["black (>=23.3.0)", "httpx (>=0.24.1)", "mkdocs (>=1.4.3)", "mkdocs-material (>=9.1.18)", "mkdocstrings[python] (>=0.22.0)", "pytest (>=7.4.0)", "twine (>=4.0.2)"]
+dev = ["httpx (>=0.24.1)", "mkdocs (>=1.4.3)", "mkdocs-material (>=9.1.18)", "mkdocstrings[python] (>=0.22.0)", "pytest (>=7.4.0)", "ruff (>=0.15.7)", "twine (>=4.0.2)"]
 server = ["PyYAML (>=5.1)", "fastapi (>=0.100.0)", "pydantic-settings (>=2.0.1)", "sse-starlette (>=1.6.1)", "starlette-context (>=0.3.6,<0.4)", "uvicorn (>=0.22.0)"]
-test = ["fastapi (>=0.100.0)", "httpx (>=0.24.1)", "pydantic-settings (>=2.0.1)", "pytest (>=7.4.0)", "scipy (>=1.10)", "sse-starlette (>=1.6.1)", "starlette-context (>=0.3.6,<0.4)"]
+test = ["fastapi (>=0.100.0)", "httpx (>=0.24.1)", "huggingface-hub (>=0.23.0)", "pydantic-settings (>=2.0.1)", "pytest (>=7.4.0)", "scipy (>=1.10)", "sse-starlette (>=1.6.1)", "starlette-context (>=0.3.6,<0.4)"]
 
 [[package]]
 name = "markupsafe"
@@ -919,4 +919,4 @@ zstd = ["backports-zstd (>=1.0.0)"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.12"
-content-hash = "6a9ac9139e81e2587194bb61687170aa04100116006476ed1a2afc112f162a8a"
+content-hash = "589631e06b3bc530a8a0537ef2a148d2d8156faedd8c2555a5501c5ac09a5b51"
