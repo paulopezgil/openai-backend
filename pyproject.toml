@@ -15,6 +15,7 @@ huggingface-hub = "^0.20.0"
 pydantic = "^2.13.4"
 python-dotenv = "^1.2.2"
 django-environ = "^0.13.0"
+openai = "^2.38.0"
 
 
 [build-system]
