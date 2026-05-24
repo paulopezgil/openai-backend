@@ -1,10 +1,11 @@
 [tool.poetry]
-name = "local-ai-backend"
+name = "openai-backend"
 version = "0.1.0"
 description = ""
 authors = ["Pau López Gil <paulopezgilperez@gmail.com>"]
 license = "MIT"
 readme = "README.md"
+package-mode = false
 
 [tool.poetry.dependencies]
 python = "^3.12"
