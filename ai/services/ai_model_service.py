@@ -1,7 +1,7 @@
 import gc
 import logging
 from pathlib import Path
-from typing import Optional, Any
+from typing import Optional, Any, Union, Iterator
 from huggingface_hub import hf_hub_download
 from llama_cpp import Llama
 from django.conf import settings
@@ -19,7 +19,7 @@ PARAMETER_MAPPINGS = {
     "max_completion_tokens": "max_tokens",
 }
 
-def call_ai_model(ai_model: Llama, **kwargs: Any) -> dict:
+def call_ai_model(ai_model: Llama, **kwargs: Any) -> Union[dict, Iterator[dict]]:
     """Call the AI model with the given parameters."""
 
     def _prepare_kwargs(kwargs: dict[str, Any]) -> dict[str, Any]:
