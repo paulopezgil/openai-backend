@@ -7,16 +7,7 @@ from django.conf import settings
 logger = logging.getLogger(__name__)
 
 
-UNSUPPORTED_PARAMETERS = {
-    "n", "stream_options", "user", "parallel_tool_calls",
-    "metadata", "service_tier", "reasoning_effort", "store",
-}
-
-PARAMETER_MAPPINGS = {
-    "max_completion_tokens": "max_tokens",
-}
-
-class AIModelRegistry:
+class ModelService:
     def __init__(self) -> None:
         self._ai_models_dir = getattr(settings, "AI_MODELS_DIR", "ai_models")
 
