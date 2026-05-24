@@ -20,7 +20,7 @@ PARAMETER_MAPPINGS = {
 }
 
 def call_ai_model(ai_model: Llama, **kwargs: Any) -> Union[dict, Iterator[dict]]:
-    """Call the AI model with the given parameters."""
+    """Call the AI model with the given parameters, after validating and preparing them."""
 
     def _prepare_kwargs(kwargs: dict[str, Any]) -> dict[str, Any]:
         if not kwargs.get("messages"):
