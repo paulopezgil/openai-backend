@@ -1,6 +1,7 @@
 from typing import Any, Optional, Union, Literal
-
 from pydantic import BaseModel, Field
+
+from .request import BaseRequest
 
 
 class TextContentPart(BaseModel):
@@ -120,7 +121,7 @@ class ToolChoiceSpecific(BaseModel):
 ToolChoice = Union[Literal["none", "auto", "required"], ToolChoiceSpecific]
 
 
-class ChatCompletionRequest(BaseModel):
+class ChatCompletionRequest(BaseRequest):
     # Required parameters
     model: str
     messages: list[Message]
