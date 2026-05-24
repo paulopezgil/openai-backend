@@ -7,7 +7,6 @@ Django REST API wrapper for local GGUF models via llama-cpp-python. OpenAI-compa
 - **OpenAI-compatible API**: `/v1/chat/completions` and `/v1/embeddings` endpoints
 - **Local GGUF Models**: Run quantized models without cloud dependencies
 - **Model Management**: Download and manage models from HuggingFace Hub
-- **Memory-efficient**: Model loaded once at startup, shared across requests
 - **Async-ready**: Django async views for non-blocking inference
 
 ## Tech Stack
@@ -52,19 +51,19 @@ Create a `.env` file in the project root:
 # HuggingFace token for downloading models (optional but recommended)
 HF_TOKEN=hf_your_token_here
 
-# Models directory (optional, defaults to ./models)
-MODELS_DIR=./models
+# AI Models directory (optional, defaults to ./ai_models)
+AI_MODELS_DIR=./ai_models
 ```
 
 Get your HF token at: https://huggingface.co/settings/tokens
 
-### Downloading Models
+### Downloading AI Models
 
 ```bash
-# Download a model from HuggingFace
+# Download an AI model from HuggingFace
 poetry run python tests/models/download.py TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF tinyllama-1.1b-chat-v1.0.Q2_K.gguf
 
-# List available models
+# List available AI models
 poetry run python tests/models/list_models.py
 ```
 
@@ -80,7 +79,7 @@ POST /v1/chat/completions
 curl -X POST http://localhost:8000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "tinyllama-1.1b-chat-v1.0.Q2_K.gguf",
+    "model": "tinyllama-1.1b-chat-v1.0.Q2_K",
     "messages": [{"role": "user", "content": "Hello!"}],
     "max_tokens": 100
   }'
@@ -96,7 +95,7 @@ POST /v1/embeddings
 curl -X POST http://localhost:8000/v1/embeddings \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "your-model.gguf",
+    "model": "your-model",
     "input": "Your text here"
   }'
 ```
@@ -116,8 +115,7 @@ local-ai-backend/
 │   ├── models.py           # Django models (GGUFModel)
 │   ├── schemas/            # Pydantic schemas
 │   ├── services/           # Business logic
-│   │   ├── model_registry.py   # Model download/list
-│   │   ├── model_loader.py     # LLM loading/inference
+│   │   ├── ai_model_service.py   # AI model download/list/load
 │   │   ├── chat_service.py    # Chat completions
 │   │   └── embeddings_service.py
 │   └── views.py            # API endpoints
@@ -125,7 +123,7 @@ local-ai-backend/
 │   ├── settings.py         # Django configuration
 │   ├── urls.py             # URL routing
 │   └── wsgi.py / asgi.py
-├── models/                 # GGUF model files
+├── ai_models/              # GGUF AI model files
 ├── tests/
 │   └── models/             # Utility scripts
 │       ├── download.py
@@ -139,7 +137,7 @@ Django settings are in `core/settings.py`. The project uses `django-environ` to 
 
 Key settings:
 - `BASE_DIR`: Project root (auto-detected)
-- `MODELS_DIR`: Where GGUF files are stored (defaults to `./models`)
+- `AI_MODELS_DIR`: Where GGUF AI model files are stored (defaults to `./ai_models`)
 - `HF_TOKEN`: HuggingFace authentication token
 
 ## Development

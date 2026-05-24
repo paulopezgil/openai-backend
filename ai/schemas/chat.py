@@ -1,6 +1,6 @@
 from typing import Any, Optional, Union, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class TextContentPart(BaseModel):
@@ -33,7 +33,7 @@ class ToolCall(BaseModel):
 
 
 class SystemMessage(BaseModel):
-    role: Literal["system", "developer"]
+    role: Literal["system", "user", "assistant", "tool"]
     content: Union[str, list[TextContentPart]]
     name: Optional[str] = None
 
@@ -121,35 +121,46 @@ ToolChoice = Union[Literal["none", "auto", "required"], ToolChoiceSpecific]
 
 
 class ChatCompletionRequest(BaseModel):
+    # Required parameters
     model: str
     messages: list[Message]
 
+    # Llama-cpp supported parameters (Optional with defaults)
     temperature: Optional[float] = 1.0
     top_p: Optional[float] = 1.0
-    n: Optional[int] = 1
     max_tokens: Optional[int] = None
     max_completion_tokens: Optional[int] = None
     stop: Optional[Union[str, list[str]]] = None
     stream: Optional[bool] = False
-    stream_options: Optional[dict[str, Any]] = None
     presence_penalty: Optional[float] = 0.0
     frequency_penalty: Optional[float] = 0.0
     logit_bias: Optional[dict[str, float]] = None
     logprobs: Optional[bool] = None
     top_logprobs: Optional[int] = None
     seed: Optional[int] = None
-    user: Optional[str] = None
-
     response_format: Optional[ResponseFormat] = None
     tools: Optional[list[Tool]] = None
     tool_choice: Optional[ToolChoice] = None
-    parallel_tool_calls: Optional[bool] = True
 
-    store: Optional[bool] = None
+    # Unsupported llama-cpp parameters (filtered by our app)
+    n: Optional[int] = 1
+    stream_options: Optional[dict[str, Any]] = None
+    user: Optional[str] = None
+    parallel_tool_calls: Optional[bool] = True
     metadata: Optional[dict[str, str]] = None
     service_tier: Optional[Literal["auto", "default", "flex"]] = None
-
     reasoning_effort: Optional[Literal["low", "medium", "high"]] = None
+    store: Optional[bool] = None
+
+    # Advanced llama-cpp sampling parameters
+    top_k: Optional[int] = None
+    min_p: Optional[float] = None
+    typical_p: Optional[float] = None
+    repeat_penalty: Optional[float] = None
+    tfs_z: Optional[float] = None
+    mirostat_mode: Optional[int] = None
+    mirostat_tau: Optional[float] = None
+    mirostat_eta: Optional[float] = None
 
 
 class UsageDetails(BaseModel):
@@ -171,7 +182,7 @@ class AssistantResponseMessage(BaseModel):
     content: Optional[str] = None
     refusal: Optional[str] = None
     tool_calls: Optional[list] = None
-    annotations: list = []
+    annotations: list = Field(default_factory=list)
 
 
 class Choice(BaseModel):

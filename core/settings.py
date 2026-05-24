@@ -21,7 +21,7 @@ environ.Env.read_env(BASE_DIR / ".env")
 
 # AI Settings
 HF_TOKEN = env("HF_TOKEN", default="")
-MODELS_DIR = env("MODELS_DIR", default=str(BASE_DIR / "models"))
+AI_MODELS_DIR = env("AI_MODELS_DIR", default=str(BASE_DIR / "ai_models"))
 
 
 # Quick-start development settings - unsuitable for production
