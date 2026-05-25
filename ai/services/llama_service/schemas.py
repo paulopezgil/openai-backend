@@ -12,7 +12,6 @@ class LlamaCppChatCompletionInput(BaseModel):
     model_config = {"arbitrary_types_allowed": True}
 
     # Required parameters
-    model: str
     messages: list[ChatCompletionRequestMessage]
 
     # Function/Tool parameters
@@ -45,7 +44,7 @@ class LlamaCppChatCompletionInput(BaseModel):
     mirostat_eta: Optional[float] = 0.1
     
     # Advanced parameters
-    model_name: Optional[str] = None
+    model: Optional[str] = None
     logits_processor: Optional[LogitsProcessorList] = None
     grammar: Optional[LlamaGrammar] = None
     logit_bias: Optional[dict[int, float]] = None
