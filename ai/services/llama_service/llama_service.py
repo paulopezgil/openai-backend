@@ -59,7 +59,9 @@ class LlamaService:
         if self._loaded_ai_model is None:
             raise ModelNotLoadedError("No AI model is currently loaded. Please load a model before calling it.")
 
-        return self._loaded_ai_model.create_chat_completion(input.model_dump())
+        return self._loaded_ai_model.create_chat_completion(
+            **input.model_dump(exclude_none=True)
+        )
 
     def create_completion(self, input: LlamaCppCompletionInput) -> Union[CreateCompletionResponse, Iterator[CreateCompletionStreamResponse]]:
         """Call the AI model with the given parameters, after validating and preparing them."""
@@ -67,7 +69,9 @@ class LlamaService:
         if self._loaded_ai_model is None:
             raise ModelNotLoadedError("No AI model is currently loaded. Please load a model before calling it.")
 
-        return self._loaded_ai_model.create_completion(input.model_dump())
+        return self._loaded_ai_model.create_completion(
+            **input.model_dump(exclude_none=True)
+        )
 
     def create_embedding(self, input: LlamaCppEmbeddingInput) -> CreateEmbeddingResponse:
         """Call the AI model to create embeddings with the given parameters."""
@@ -75,7 +79,9 @@ class LlamaService:
         if self._loaded_ai_model is None:
             raise ModelNotLoadedError("No AI model is currently loaded. Please load a model before calling it.")
 
-        return self._loaded_ai_model.create_embedding(input.model_dump())
+        return self._loaded_ai_model.create_embedding(
+            **input.model_dump(exclude_none=True)
+        )
 
     def __del__(self):
         """Ensure AI model is unloaded when the service is destroyed."""

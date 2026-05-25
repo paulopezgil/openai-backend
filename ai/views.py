@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 def _stream_response(result):
     try:
         for chunk in result:
-            yield f"data: {chunk.model_dump_json()}\n\n"
+            yield f"data: {json.dumps(chunk)}\n\n"
     except GeneratorExit:
         pass
     except Exception as e:
@@ -65,7 +65,7 @@ class ChatCompletionsView(View):
                 content_type="text/event-stream",
             )
 
-        return JsonResponse(result.model_dump())
+        return JsonResponse(result)
 
 
 @method_decorator(csrf_exempt, name="dispatch")
@@ -88,7 +88,7 @@ class EmbeddingsView(View):
         except Exception as e:
             return handle_exception(e)
 
-        return JsonResponse(result.model_dump())
+        return JsonResponse(result)
 
 
 class ModelsView(View):
