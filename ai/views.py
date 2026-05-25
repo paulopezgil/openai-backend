@@ -100,7 +100,7 @@ class ModelsView(View):
 
         now = int(time.time())
         data = [
-            Model(id=name, created=now, owned_by="local")
+            Model(id=name, created=now, object="model", owned_by="local")
             for name in model_names
         ]
 
