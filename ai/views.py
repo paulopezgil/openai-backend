@@ -1,97 +1,110 @@
+import json
 import logging
-from typing import Union, Iterator, Optional, List, Dict
+import time
+from typing import Union
 
-
-# Django imports
 from django.http import StreamingHttpResponse, JsonResponse, HttpRequest
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 
-
-# Official OpenAI Input/Request Type (Pydantic Models)
-from openai.types.chat.completion_create_params import CompletionCreateParams as ChatCompletionRequest
-from openai.types.completion_create_params import CompletionCreateParams as CompletionRequest
-from openai.types.embedding_create_params import EmbeddingCreateParams as EmbeddingRequest
-
-# Official OpenAI Output/Response Type (Pydantic Models)
 from openai.types.chat import ChatCompletion as ChatCompletionResponse
 from openai.types import Completion as CompletionResponse
 from openai.types import CreateEmbeddingResponse as EmbeddingResponse
 from openai.types.model import Model
 
+from ai.services import request_manager
+from ai.services.llama_service import (
+    LlamaCppChatCompletionInput,
+    LlamaCppEmbeddingInput,
+)
+from ai.services.llama_service.cleaners import clean_chat_params, clean_embedding_params
+from ai.exceptions import BadRequest, handle_exception
 
 logger = logging.getLogger(__name__)
 
 
+def _stream_response(result):
+    try:
+        for chunk in result:
+            yield f"data: {chunk.model_dump_json()}\n\n"
+    except GeneratorExit:
+        pass
+    except Exception as e:
+        logger.exception("Streaming error")
+        yield f"data: {json.dumps({'error': str(e)})}\n\n"
+    finally:
+        yield "data: [DONE]\n\n"
+
+
 @method_decorator(csrf_exempt, name="dispatch")
 class ChatCompletionsView(View):
-    """
-    OpenAI-compatible chat completions endpoint.
-    
-    POST /v1/chat/completions
-    Returns: Union[ChatCompletion, Iterator[ChatCompletionChunk]]
-    """
-    
     def post(self, request: HttpRequest) -> Union[JsonResponse, StreamingHttpResponse]:
-        """
-        Handle chat completion requests.
-        
-        Args:
-            request: Django HTTP request with JSON body containing:
-                - messages: List[ChatCompletionMessageParam]
-                - model: str
-                - temperature: Optional[float]
-                - top_p: Optional[float]
-                - max_tokens: Optional[int]
-                - stream: Optional[bool]
-                - And other OpenAI-compatible parameters
-        
-        Returns:
-            JsonResponse: ChatCompletion or StreamingHttpResponse for streaming
-        """
-        pass
+        try:
+            body = json.loads(request.body)
+            cleaned = clean_chat_params(body)
+
+            model = cleaned.get("model")
+            if not model:
+                raise BadRequest("model is required")
+
+            try:
+                input_data = LlamaCppChatCompletionInput(**cleaned)
+            except Exception as exc:
+                raise BadRequest(str(exc)) from exc
+            is_stream = bool(cleaned.get("stream", False))
+
+            result = request_manager.execute_chat(model, input_data)
+
+        except Exception as e:
+            return handle_exception(e)
+
+        if is_stream:
+            return StreamingHttpResponse(
+                _stream_response(result),
+                content_type="text/event-stream",
+            )
+
+        return JsonResponse(result.model_dump())
 
 
 @method_decorator(csrf_exempt, name="dispatch")
 class EmbeddingsView(View):
-    """
-    OpenAI-compatible embeddings endpoint.
-    
-    POST /v1/embeddings
-    Returns: CreateEmbeddingResponse
-    """
-    
     def post(self, request: HttpRequest) -> JsonResponse:
-        """
-        Handle embedding requests.
-        
-        Args:
-            request: Django HTTP request with JSON body containing:
-                - input: Union[str, List[str], List[int], List[List[int]]]
-                - model: str
-                - encoding_format: Optional[str]
-                - dimensions: Optional[int]
-        
-        Returns:
-            JsonResponse: CreateEmbeddingResponse with Embedding[] data
-        """
-        pass
+        try:
+            body = json.loads(request.body)
+            cleaned = clean_embedding_params(body)
+
+            model = cleaned.get("model")
+            if not model:
+                raise BadRequest("model is required")
+
+            try:
+                input_data = LlamaCppEmbeddingInput(**cleaned)
+            except Exception as exc:
+                raise BadRequest(str(exc)) from exc
+            result = request_manager.execute_embedding(model, input_data)
+
+        except Exception as e:
+            return handle_exception(e)
+
+        return JsonResponse(result.model_dump())
 
 
 class ModelsView(View):
-    """
-    OpenAI-compatible models listing endpoint.
-    
-    GET /v1/models
-    Returns: List[Model]
-    """
-    
     def get(self, request: HttpRequest) -> JsonResponse:
-        """
-        List available models.
-        
-        Returns:
-            JsonResponse: { "object": "list", "data": Model[] }
-        """
-        pass
+        try:
+            model_names = request_manager.model_service.list_ai_models()
+        except Exception as e:
+            return handle_exception(e)
+
+        now = int(time.time())
+        data = [
+            Model(id=name, created=now, owned_by="local")
+            for name in model_names
+        ]
+
+        return JsonResponse({
+            "object": "list",
+            "data": [m.model_dump() for m in data],
+        })

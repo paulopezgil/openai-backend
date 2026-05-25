@@ -1,7 +1,9 @@
 import logging
 from pathlib import Path
+from typing import Any
 from huggingface_hub import hf_hub_download
 from django.conf import settings
+from ai.models import GGUFModel
 
 
 logger = logging.getLogger(__name__)
@@ -54,12 +56,27 @@ class ModelService:
         ai_model_path = self._get_ai_models_dir_path() / full_ai_model_name
         if ai_model_path.is_file():
             return str(ai_model_path)
-        
-        # TODO: Create a specific exception for this case and handle it in the caller
-        raise FileNotFoundError(
-            f"AI model '{ai_model_name}' not found in '{self._ai_models_dir}'. "
-            f"Available models: {', '.join(self.list_ai_models())}"
-        )
+        return None
+    
+    def ai_model_exists(self, ai_model_name: str) -> bool:
+        """Check if the AI model file exists."""
+        return self.get_ai_model_path(ai_model_name) is not None
+
+    def get_loader_kwargs(self, ai_model_name: str) -> dict[str, Any]:
+        """Return DB-stored loader params for a model, falling back to defaults."""
+        try:
+            config = GGUFModel.objects.get(filename=ai_model_name)
+        except GGUFModel.DoesNotExist:
+            try:
+                config = GGUFModel.objects.get(filename=f"{ai_model_name}.gguf")
+            except GGUFModel.DoesNotExist:
+                return {}
+        return {
+            "n_ctx": config.n_ctx,
+            "n_gpu_layers": config.n_gpu_layers,
+            "n_threads": config.n_threads,
+            "seed": config.seed,
+        }
 
     def _get_ai_models_dir_path(self) -> Path:
         """Get the path to the AI models directory."""

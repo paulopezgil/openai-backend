@@ -9,6 +9,8 @@ from llama_cpp import (
 
 
 class LlamaCppChatCompletionInput(BaseModel):
+    model_config = {"arbitrary_types_allowed": True}
+
     # Required parameters
     model: str
     messages: list[ChatCompletionRequestMessage]
@@ -52,6 +54,8 @@ class LlamaCppChatCompletionInput(BaseModel):
 
 
 class LlamaCppCompletionInput(BaseModel):
+    model_config = {"arbitrary_types_allowed": True}
+
     # Required parameters
     prompt: Union[str, list[int]]
     

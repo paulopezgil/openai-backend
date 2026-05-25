@@ -1,3 +1,8 @@
 from django.contrib import admin
 
-# Register your models here.
+from .models import GGUFModel
+
+
+@admin.register(GGUFModel)
+class GGUFModelAdmin(admin.ModelAdmin):
+    list_display = ("filename", "type", "n_ctx", "n_gpu_layers")

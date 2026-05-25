@@ -5,6 +5,7 @@ from llama_cpp import (
     CreateCompletionResponse, CreateCompletionStreamResponse,
     CreateEmbeddingResponse
 )
+from ai.exceptions import ModelNotLoadedError
 from .schemas import (
     LlamaCppChatCompletionInput,
     LlamaCppCompletionInput,
@@ -13,20 +14,9 @@ from .schemas import (
 
 
 class LlamaService:
-    _instance = None
-
-    def __new__(cls) -> "LlamaService":
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-            cls._instance._initialized = False
-        return cls._instance
-
     def __init__(self) -> None:
-        if self._initialized:
-            return
         self._loaded_ai_model = None
         self._loaded_ai_model_path = None
-        self._initialized = True
 
     @property
     def loaded_ai_model(self) -> Optional[Llama]:
@@ -66,27 +56,24 @@ class LlamaService:
     def create_chat_completion(self, input: LlamaCppChatCompletionInput) -> Union[ChatCompletion, Iterator[ChatCompletionChunk]]:
         """Call the AI model with the given parameters, after validating and preparing them."""
         
-        # TODO: Use custom exception types for better error handling in the caller
         if self._loaded_ai_model is None:
-            raise ValueError("No AI model is currently loaded. Please load a model before calling it.")
+            raise ModelNotLoadedError("No AI model is currently loaded. Please load a model before calling it.")
 
         return self._loaded_ai_model.create_chat_completion(input.model_dump())
-    
+
     def create_completion(self, input: LlamaCppCompletionInput) -> Union[CreateCompletionResponse, Iterator[CreateCompletionStreamResponse]]:
         """Call the AI model with the given parameters, after validating and preparing them."""
-        
-        # TODO: Use custom exception types for better error handling in the caller
+
         if self._loaded_ai_model is None:
-            raise ValueError("No AI model is currently loaded. Please load a model before calling it.")
+            raise ModelNotLoadedError("No AI model is currently loaded. Please load a model before calling it.")
 
         return self._loaded_ai_model.create_completion(input.model_dump())
 
     def create_embedding(self, input: LlamaCppEmbeddingInput) -> CreateEmbeddingResponse:
         """Call the AI model to create embeddings with the given parameters."""
-        
-        # TODO: Use custom exception types for better error handling in the caller
+
         if self._loaded_ai_model is None:
-            raise ValueError("No AI model is currently loaded. Please load a model before calling it.")
+            raise ModelNotLoadedError("No AI model is currently loaded. Please load a model before calling it.")
 
         return self._loaded_ai_model.create_embedding(input.model_dump())
 

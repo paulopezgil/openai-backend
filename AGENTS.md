@@ -75,8 +75,19 @@ are waiting.
 root/
 ├── core/          # Django project settings (settings.py, urls.py, asgi.py)
 ├── ai/            # Main application
+│   ├── views.py   # API views (ChatCompletions, Embeddings, Models)
+│   ├── exceptions.py  # Custom exception hierarchy + handle_exception()
+│   ├── models.py  # GGUFModel (DB-backed per-model loader config)
+│   ├── admin.py   # GGUFModel registered in admin
 │   └── services/  # AI services
-│       └── ai_model_service.py  # AIModelRegistry, AIModelLoader
+│       ├── __init__.py       # Composition root (wires RequestManager)
+│       ├── request_manager.py  # Thread-safe orchestrator with VRAM lock
+│       ├── model_service.py    # File paths, downloads, DB config lookup
+│       └── llama_service/
+│           ├── __init__.py
+│           ├── llama_service.py  # Llama wrapper (load/unload/inference)
+│           ├── schemas.py        # Pydantic models for llama-cpp inputs
+│           └── cleaners.py       # Endpoint-specific parameter cleaning
 ├── manage.py
 └── pyproject.toml # Poetry-managed
 ```
@@ -93,13 +104,14 @@ root/
 - pydantic ^2.13.4
 - python-dotenv ^1.2.2
 - django-environ ^0.13.0
+- openai ^2.38.0
 
 ## Commands
 ```bash
 # Install deps
 poetry install
 
-# Run dev server (ASGI recommended for async)
+# Run dev server
 poetry run python manage.py runserver 0.0.0.0:8000
 
 # Check config
@@ -107,21 +119,105 @@ poetry run python manage.py check
 
 # Shell
 poetry run python manage.py shell
+
+# Make migrations
+poetry run python manage.py makemigrations ai
 ```
+
+## Active Technical Context
+
+### Current System State
+- Three endpoints implemented: `POST /v1/chat/completions`, `POST /v1/embeddings`, `GET /v1/models`
+- Chat completions support SSE streaming (OpenAI `text/event-stream` format)
+- All endpoints are synchronous (Django `View`, not async)
+- Endpoints served at `/ai/v1/chat/completions`, `/ai/v1/embeddings`, `/ai/v1/models`
+- `GET /v1/completions` (legacy) is still a stub — `execute_completion` ready but no view wired
+- Stream generator (`_stream_generator_wrapper`) holds VRAM lock for stream duration, releases in `finally`
+
+### New Files (this session)
+- `ai/services/__init__.py` — composition root
+- `ai/services/request_manager.py` — orchestrates inference with VRAM lock
+- `ai/services/llama_service/cleaners.py` — parameter cleaning per endpoint
+
+### Model Configuration (DB-backed)
+- `GGUFModel` model in `ai/models.py` stores per-model loader params: `n_ctx`, `n_gpu_layers`, `n_threads`, `seed`, `type` (chat/embedding)
+- Migrations 0001 and 0002 already applied
+- Registered in admin at `/admin/ai/ggufmodel/`
+- `ModelService.get_loader_kwargs(model_name)` queries by filename, falls back to `{}`
+- `RequestManager._prepare_model()` merges DB config with any explicit `loader_kwargs` (explicit wins)
+- Auto-creation on download NOT yet implemented
+
+### Exception System
+- All custom exceptions in `ai/exceptions.py`
+- `handle_exception(error)` is the single entry point for views — every view method has one `except Exception as e: return handle_exception(e)`
+- See [Exception Hierarchy](#exception-hierarchy) below
 
 ## Services Layer
 
-### AIModelRegistry
-- `download_ai_model(repo_id, filename)` - Download GGUF from HuggingFace
-- `list_ai_models()` - List available GGUF files in AI models directory
-- `get_ai_model_path(ai_model_name)` - Get full path to AI model file
+### Composition Root (`ai/services/__init__.py`)
+```python
+request_manager = RequestManager(
+    engine=LlamaService(),
+    model_service=ModelService(),
+)
+```
+Views import `from ai.services import request_manager`. Never use singletons — normal classes with a single wired instance at module level.
 
-### AIModelLoader
-- `load_ai_model(ai_model_path, **kwargs)` - Load AI model into memory by path
-- `clear_loaded_ai_model()` - Unload AI model from memory
-- Properties: `loaded_ai_model`, `loaded_ai_model_path`
+### RequestManager
+- `execute_chat(model_name, input_data, loader_kwargs=None)` → ChatCompletion | Iterator[ChatCompletionChunk]
+- `execute_completion(model_name, input_data, loader_kwargs=None)` → CompletionResponse | Iterator[...]
+- `execute_embedding(model_name, input_data, loader_kwargs=None)` → EmbeddingResponse
+- Acquires `threading.Lock()` before model prep + inference; releases in `finally` or passes to `_stream_generator_wrapper`
+- Wraps third-party exceptions in `ServiceError` before re-raising; passes `APIError` subclasses through unwrapped
 
-Both are normal Python classes (not singletons) implemented in `ai/services/ai_model_service.py`.
+### ModelService
+- `list_ai_models()` → list[str] — GGUF file stems (no extension)
+- `get_ai_model_path(model_name)` → str | None (returns None if not found)
+- `get_loader_kwargs(model_name)` → dict — queries `GGUFModel` by filename (tries with/without `.gguf`), returns `{}` on miss
+- `ai_model_exists(model_name)` → bool
+- `download_ai_model(repo_id, filename)` → str — downloads via `hf_hub_download`
+
+### LlamaService
+- `load_ai_model(ai_model_path, n_ctx=2048, n_gpu_layers=0, n_threads=None, seed=-1, **kwargs)`
+- `unload_ai_model()` — deletes model ref + `gc.collect()`
+- Properties: `loaded_ai_model` (Optional[Llama]), `loaded_ai_model_path` (Optional[str])
+- `create_chat_completion(input)`, `create_completion(input)`, `create_embedding(input)` — pass-through to llama-cpp, raise `ModelNotLoadedError` if no model loaded
+
+### Parameter Cleaning (`cleaners.py`)
+Per-endpoint functions that strip unsupported params and apply mappings:
+- `clean_chat_params(body)` — strips `user`, `service_tier`, `metadata`, `reasoning_effort`, `stream_options`, `parallel_tool_calls`; maps `max_completion_tokens` → `max_tokens`; silently coerces `n` to 1
+- `clean_embedding_params(body)` — strips `user`
+- `clean_completion_params(body)` — stub, no current unsupported params
+
+## Exception Hierarchy
+
+```
+APIError (500)               ← never raise directly, always use concrete subclass
+├── BadRequest (400)         ← validation errors (missing model, bad params)
+├── NotFound (404)
+│   └── ModelNotFoundError   ← model file not on disk
+├── ModelNotLoadedError (500)← inference attempted without loaded model
+└── ServiceError (500)       ← wrapper for third-party/unexpected errors
+```
+
+### Exception Flow Rules
+1. Every `raise` in `ai/services/` must be a concrete `APIError` subclass — never raw `APIError()`
+2. Third-party exceptions caught in `RequestManager.execute_*()` are wrapped via `ServiceError(str(e)) from e` before re-raising
+3. Our exceptions (`ModelNotFoundError`, `ModelNotLoadedError`, `BadRequest`) are re-raised as-is
+4. `handle_exception()` in `exceptions.py` routes by `isinstance`:
+   - `json.JSONDecodeError` → `{"error": "Invalid JSON body"}` (400)
+   - `APIError` → `{"error": str(e)}` using `e.status_code`
+   - `FileNotFoundError` → `{"error": "Model not found: ..."}` (404)
+   - Any other → `{"error": "Internal server error"}` (500, logged)
+5. Pydantic `ValidationError` is wrapped as `BadRequest` via a nested `try/except` in the view
+
+## Learned Rules & Guardrails
+
+- **Never use singletons** — use normal classes wired at the composition root (`ai/services/__init__.py`). This improves testability and removes hidden global state.
+- **Never raise `APIError` directly** — always use a concrete subclass (`BadRequest`, `ModelNotFoundError`, `ModelNotLoadedError`, `ServiceError`).
+- **Wrap third-party exceptions at service boundaries** — catch in `RequestManager.execute_*()` and re-raise as `ServiceError`.
+- **Keep `except Exception` blocks only when they add real functionality** (lock cleanup, resource release, graceful shutdown). Remove bare re-raises that add no behavior.
+- **Parameter cleaning lives in the service layer** (`cleaners.py`), not in views. Views only parse JSON, raise validations, and call services.
 
 ## AI Model File Handling
 - AI Models stored in `./ai_models/` directory (flat files, no subfolders)
@@ -163,14 +259,14 @@ These OpenAI parameters have no equivalent in llama-cpp-python:
 
 | Parameter | Reason | Handling |
 |---|---|---|
-| `n` | Only single completion per request | Reject if != 1 |
+| `n` | Only single completion per request | Silently coerced to 1 |
 | `stream_options` | Not implemented | Ignore |
 | `user` | No user identification | Ignore |
-| `service_tier` | Local-only API | Reject or ignore |
+| `service_tier` | Local-only API | Ignore |
 | `metadata` | No storage | Ignore |
 | `reasoning_effort` | Not for local models | Ignore |
-| `parallel_tool_calls` | Not supported | Ignore or set False |
-| `max_completion_tokens` | Use `max_tokens` instead | Use as fallback |
+| `parallel_tool_calls` | Not supported | Ignore |
+| `max_completion_tokens` | Use `max_tokens` instead | Mapped to `max_tokens` |
 
 ### Advanced llama-cpp Sampling Parameters (Optional)
 
@@ -195,7 +291,7 @@ These can be optionally added to `ChatCompletionRequest` for clients requiring a
 2. **Pass if provided**: `logit_bias`, `logprobs`, `top_logprobs`, and advanced sampling parameters
 3. **Model parameter**: Set to `None` to use currently loaded model, or pass to identify in response
 4. **Ignore safely**: `user`, `metadata`, `stream_options` (accept in schema but don't forward)
-5. **Reject or default**: `n` (must be 1), `service_tier`, `parallel_tool_calls` (validate or use default)
+5. **Default silently**: `n` (coerced to 1), `service_tier`, `parallel_tool_calls` (ignored)
 
 ### Response Format
 
@@ -211,9 +307,12 @@ Finish reasons: `"stop"`, `"length"`, `"tool_calls"`, or `None`
 
 See `ai/LLAMA_CPP_COMPATIBILITY.md` for detailed compatibility research.
 
-## Future Roadmap
-- Add Django async views for HTTP endpoints
-- Implement streaming responses (SSE)
-- Add model configuration stored in database (per-user models)
-- Chat completion endpoint with message history
-- Admin UI for model download/management
+## Future Roadmap & Ideas
+- **Streaming timeout**: Add `_lock.acquire(timeout=30)` to prevent infinite user queuing (TODO in `request_manager.py`)
+- **Async views**: Convert to Django async views + thread offloading to avoid blocking WSGI workers during inference
+- **Auto-create GGUFModel on download**: When a model is downloaded via `download_ai_model()`, auto-create a `GGUFModel` row with defaults so every model has a config entry
+- **Wire legacy completions**: `/v1/completions` endpoint — `execute_completion` is ready, view is a stub
+- **Expose n_gpu_layers, n_ctx in API**: Allow clients to request GPU layer count or context window per-request
+- **Admin download UI**: Let admins download models from HuggingFace directly through the admin interface
+- **Chat history**: Add message history/context management for multi-turn conversations
+- **Error sanitization**: `ServiceError` currently passes third-party error messages through — consider sanitizing for production
